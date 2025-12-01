@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="pa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Duty Roster - ਸ੍ਰੀ ਹਰਿਮੰਦਰ ਸਾਹਿਬ</title>
+    
+    <!-- PWA Settings -->
+    <meta name="theme-color" content="#ea580c">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Duty Roster">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Manifest for PWA (Inline) -->
+    <link rel="manifest" id="manifest-placeholder">
+
+    <style>
+        body { -webkit-tap-highlight-color: transparent; }
+        /* Prevent pull-to-refresh on mobile */
+        overscroll-behavior-y: contain;
+    </style>
+
+    <script>
+        // Dynamic Manifest Generation
+        const manifest = {
+            "name": "Duty Roster App",
+            "short_name": "Duty Roster",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#ffffff",
+            "theme_color": "#ea580c",
+            "icons": [
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2693/2693507.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "https://cdn-icons-png.flaticon.com/512/2693/2693507.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        };
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        document.querySelector('#manifest-placeholder').setAttribute('href', manifestURL);
+    </script>
+</head>
+<body class="bg-amber-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // --- ICONS COMPONENTS (Replaces Lucide import) ---
+        const IconWrapper = ({ children, className }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {children}
+            </svg>
+        );
+
+        const CalendarIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </IconWrapper>
+        );
+
+        const ClockIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </IconWrapper>
+        );
+
+        const SunIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </IconWrapper>
+        );
+
+        const MoonIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </IconWrapper>
+        );
+
+        const ArrowRightIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+                <polyline points="12 5 19 12 12 19"></polyline>
+            </IconWrapper>
+        );
+
+        const RotateCcwIcon = ({ className }) => (
+            <IconWrapper className={className}>
+                <polyline points="1 4 1 10 7 10"></polyline>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+            </IconWrapper>
+        );
+
+        // --- MAIN APP COMPONENT ---
+        const DutyRosterApp = () => {
+            const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+            const [startShift, setStartShift] = useState('evening'); 
+            const [schedule, setSchedule] = useState([]);
+
+            const daysInPunjabi = ['ਐਤਵਾਰ', 'ਸੋਮਵਾਰ', 'ਮੰਗਲਵਾਰ', 'ਬੁੱਧਵਾਰ', 'ਵੀਰਵਾਰ', 'ਸ਼ੁੱਕਰਵਾਰ', 'ਸ਼ਨੀਵਾਰ'];
+            const monthsInPunjabi = ['ਜਨਵਰੀ', 'ਫਰਵਰੀ', 'ਮਾਰਚ', 'ਅਪ੍ਰੈਲ', 'ਮਈ', 'ਜੂਨ', 'ਜੁਲਾਈ', 'ਅਗਸਤ', 'ਸਤੰਬਰ', 'ਅਕਤੂਬਰ', 'ਨਵੰਬਰ', 'ਦਸੰਬਰ'];
+
+            // LocalStorage to save settings
+            useEffect(() => {
+                const savedDate = localStorage.getItem('duty_startDate');
+                const savedShift = localStorage.getItem('duty_startShift');
+                const savedSchedule = localStorage.getItem('duty_schedule');
+                
+                if (savedDate) setStartDate(savedDate);
+                if (savedShift) setStartShift(savedShift);
+                if (savedSchedule) setSchedule(JSON.parse(savedSchedule));
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('duty_startDate', startDate);
+                localStorage.setItem('duty_startShift', startShift);
+                if(schedule.length > 0) {
+                    localStorage.setItem('duty_schedule', JSON.stringify(schedule));
+                }
+            }, [startDate, startShift, schedule]);
+
+            const formatDatePunjabi = (dateObj) => {
+                const dayName = daysInPunjabi[dateObj.getDay()];
+                const date = dateObj.getDate();
+                const monthName = monthsInPunjabi[dateObj.getMonth()];
+                const year = dateObj.getFullYear();
+                return `${dayName}, ${date} ${monthName} ${year}`;
+            };
+
+            const calculateSchedule = () => {
+                const newSchedule = [];
+                let currentDate = new Date(startDate);
+                let currentShift = startShift;
+
+                for (let i = 0; i < 30; i++) {
+                    let startTime = '';
+                    let endTime = '';
+                    let restMessage = '';
+                    let shiftTitle = '';
+                    let IconComponent = null;
+                    let colorClass = '';
+
+                    if (currentShift === 'evening') {
+                        shiftTitle = 'ਸ਼ਾਮ ਦੀ ਡਿਊਟੀ';
+                        startTime = '3:00 PM (ਸ਼ਾਮ)';
+                        endTime = '9:00 PM (ਰਾਤ)';
+                        restMessage = 'ਇਸ ਤੋਂ ਬਾਅਦ ਛੋਟੀ ਰੈਸਟ (ਲਗਭਗ 6 ਘੰਟੇ)';
+                        colorClass = 'border-l-4 border-orange-500 bg-orange-50';
+                    } else {
+                        shiftTitle = 'ਅੰਮ੍ਰਿਤ ਵੇਲਾ ਡਿਊਟੀ';
+                        startTime = '2:45 AM (ਸਵੇਰੇ)';
+                        endTime = '9:00 AM (ਸਵੇਰੇ)';
+                        restMessage = 'ਇਸ ਤੋਂ ਬਾਅਦ 30 ਘੰਟੇ ਦੀ ਵੱਡੀ ਰੈਸਟ';
+                        colorClass = 'border-l-4 border-blue-600 bg-blue-50';
+                    }
+
+                    newSchedule.push({
+                        id: i,
+                        dateString: formatDatePunjabi(currentDate),
+                        shiftTitle,
+                        startTime,
+                        endTime,
+                        restMessage,
+                        shiftType: currentShift,
+                        colorClass
+                    });
+
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    currentShift = currentShift === 'evening' ? 'morning' : 'evening';
+                }
+
+                setSchedule(newSchedule);
+            };
+
+            const handleReset = () => {
+                setStartDate(new Date().toISOString().split('T')[0]);
+                setStartShift('evening');
+                setSchedule([]);
+                localStorage.removeItem('duty_schedule');
+            };
+
+            return (
+                <div className="min-h-screen bg-amber-50 font-sans pb-20 select-none">
+                    <div className="max-w-md mx-auto bg-white min-h-screen sm:min-h-0 sm:my-4 sm:rounded-xl shadow-lg overflow-hidden border-x border-amber-200">
+                        
+                        {/* Header */}
+                        <div className="bg-orange-600 p-6 text-center sticky top-0 z-10 shadow-md">
+                            <h1 className="text-2xl font-bold text-white mb-1">ਸ੍ਰੀ ਹਰਿਮੰਦਰ ਸਾਹਿਬ</h1>
+                            <h2 className="text-xl font-semibold text-orange-100">ਡਿਊਟੀ ਰੋਸਟਰ (ਹਿਸਾਬ)</h2>
+                        </div>
+
+                        {/* Controls Section */}
+                        <div className="p-6 space-y-4">
+                            
+                            {/* Date Selector */}
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    ਸ਼ੁਰੂਆਤੀ ਤਾਰੀਖ ਚੁਣੋ:
+                                </label>
+                                <div className="relative">
+                                    <div className="absolute left-3 top-3 text-gray-400">
+                                        <CalendarIcon className="w-5 h-5" />
+                                    </div>
+                                    <input
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Shift Selector */}
+                            <div>
+                                <label className="block text-gray-700 font-medium mb-2">
+                                    ਪਹਿਲੀ ਡਿਊਟੀ ਕਿਹੜੀ ਹੈ?
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => setStartShift('evening')}
+                                        className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all ${
+                                            startShift === 'evening'
+                                                ? 'bg-orange-100 border-orange-500 text-orange-800 ring-2 ring-orange-500'
+                                                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <SunIcon className="w-6 h-6 mb-1" />
+                                        <span className="font-semibold text-sm">ਸ਼ਾਮ (3 PM)</span>
+                                    </button>
+                                    
+                                    <button
+                                        onClick={() => setStartShift('morning')}
+                                        className={`p-3 rounded-lg border flex flex-col items-center justify-center transition-all ${
+                                            startShift === 'morning'
+                                                ? 'bg-blue-100 border-blue-600 text-blue-800 ring-2 ring-blue-600'
+                                                : 'bg-white border-gray-300 text-gray-600 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <MoonIcon className="w-6 h-6 mb-1" />
+                                        <span className="font-semibold text-sm">ਸਵੇਰ (2:45 AM)</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-2">
+                                <button
+                                    onClick={handleReset}
+                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-3 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <RotateCcwIcon className="w-5 h-5" />
+                                    ਰੀਸੈੱਟ
+                                </button>
+
+                                <button
+                                    onClick={calculateSchedule}
+                                    className="flex-[2] bg-blue-700 hover:bg-blue-800 text-white font-bold py-3 px-4 rounded-lg shadow transition-colors flex items-center justify-center gap-2 active:scale-95 transform transition"
+                                >
+                                    <ClockIcon className="w-5 h-5" />
+                                    ਹਿਸਾਬ ਲਗਾਓ
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Results List */}
+                        {schedule.length > 0 && (
+                            <div className="bg-gray-50 border-t border-gray-200 min-h-[50vh]">
+                                <div className="p-4">
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4 px-2">
+                                        ਅਗਲੇ 30 ਦਿਨਾਂ ਦਾ ਵੇਰਵਾ:
+                                    </h3>
+                                    <div className="space-y-4">
+                                        {schedule.map((slot) => (
+                                            <div 
+                                                key={slot.id} 
+                                                className={`bg-white p-4 rounded-lg shadow-sm border ${slot.colorClass} transition-all hover:shadow-md`}
+                                            >
+                                                <div className="flex justify-between items-start mb-2">
+                                                    <div>
+                                                        <p className="font-bold text-lg text-gray-800">{slot.dateString}</p>
+                                                        <p className="text-sm font-semibold text-gray-600 flex items-center gap-1 mt-1">
+                                                            {slot.shiftType === 'evening' ? <SunIcon className="w-5 h-5 text-orange-600"/> : <MoonIcon className="w-5 h-5 text-blue-800"/>}
+                                                            {slot.shiftTitle}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex items-center gap-2 text-gray-700 bg-gray-100 p-2 rounded text-sm mb-2">
+                                                    <ClockIcon className="w-4 h-4" />
+                                                    <span>{slot.startTime}</span>
+                                                    <ArrowRightIcon className="w-4 h-4 text-gray-400" />
+                                                    <span>{slot.endTime}</span>
+                                                </div>
+
+                                                <p className={`text-xs font-medium px-2 py-1 rounded inline-block ${
+                                                    slot.shiftTitle.includes('ਅੰਮ੍ਰਿਤ') 
+                                                        ? 'bg-green-100 text-green-800' 
+                                                        : 'bg-gray-100 text-gray-600'
+                                                }`}>
+                                                    {slot.restMessage}
+                                                </p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="h-20"></div> {/* Space for scrolling */}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    
+                    <div className="text-center mt-6 text-gray-500 text-sm pb-8">
+                        ਸੇਵਾ ਅਤੇ ਸਿਮਰਨ
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DutyRosterApp />);
+    </script>
+
+    <!-- Service Worker for Offline capability -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'duty-roster-v1';
+                const urlsToCache = [
+                    '.',
+                    'https://cdn.tailwindcss.com',
+                    'https://unpkg.com/react@18/umd/react.production.min.js',
+                    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+                    'https://unpkg.com/@babel/standalone/babel.min.js',
+                    'https://cdn-icons-png.flaticon.com/512/2693/2693507.png'
+                ];
+
+                self.addEventListener('install', event => {
+                    event.waitUntil(
+                        caches.open(CACHE_NAME)
+                        .then(cache => cache.addAll(urlsToCache))
+                    );
+                });
+
+                self.addEventListener('fetch', event => {
+                    event.respondWith(
+                        caches.match(event.request)
+                        .then(response => {
+                            if (response) return response;
+                            return fetch(event.request);
+                        })
+                    );
+                });
+            `;
+            
+            const blob = new Blob([swCode], {type: 'application/javascript'});
+            const swUrl = URL.createObjectURL(blob);
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register(swUrl)
+                    .then(registration => console.log('SW registered'))
+                    .catch(err => console.log('SW failed', err));
+            });
+        }
+    </script>
+</body>
+</html>
+
